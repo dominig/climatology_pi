@@ -64,30 +64,43 @@ set(PARENT "opencpn")
 # This line is turned on in pluginconfigure.cmake because the flatpak build and building locally depends on it.
 # set(GIT_REPOSITORY_SERVER "github.com")
 
-#No longer needed, queried.
-#set(GIT_USER "rgleason")
-#set(GIT_REPOSITORY_NAME "climatology_pi")
+# Managing legacy build out of git tree
+option(BUILD_LEGACY_MODE "Build without including git tag nor supporting CloudSmith metadata" [OFF])
+find_program (GITCOMMAND git)
+if (NOT ${BUILD_LEGACY_MODE} AND NOT EXISTS ${GITCOMMAND})
+    message( FATAL_ERROR "${CMLOC}:${BUILD_LEGACY_MODE} is set as OFF but not git command was found in PATH")
+endif (NOT ${BUILD_LEGACY_MODE} AND NOT EXISTS ${GITCOMMAND})
 
 # Specifies cloudsmith repository sufficies
-set(PROD "prod") # Standard Repos
-set(BETA "beta") # Standard Repos
-set(ALPHA "alpha") # Standard Repos
+if (BUILD_LEGACY_MODE)
+    message( STATUS "${CMLOC}:BUILD_FOR_CLOUDSMITH is OFF Building package in LEGACY mode")
+else (BUILD_LEGACY_MODE)
+    message( STATUS "${CMLOC}:BUILD_FOR_CLOUDSMITH Building for CloudSmith and Flat pack")
+    set(PROD "prod") # Standard Repos
+    set(BETA "beta") # Standard Repos
+    set(ALPHA "alpha") # Standard Repos
+    # Set if your cloudsmith repository name does not match your git repository name 
+    #set(CLOUDSMITH_USER "rick-gleason")
+    set(CLOUDSMITH_USER "opencpn")
+    
+    # Set if Cloudsmith Base Repository name does not match your Git Repository name.
+    #set(CLOUDSMITH_BASE_REPOSITORY "${GIT_REPOSITORY_NAME}")
+    set(CLOUDSMITH_BASE_REPOSITORY "climatology")  #without the _pi
+    
+    # Set Plugin info-url, summary and description									 
+    set(XML_INFO_URL "https://opencpn.org/OpenCPN/plugins/climatology.html")
+    set(XML_SUMMARY ${SHORT_DESCRIPTION})
+    set(XML_DESCRIPTION ${LONG_DESCRIPTION})
+endif (BUILD_LEGACY_MODE)
 
-# Set if your cloudsmith repository name does not match your git repository name 
-#set(CLOUDSMITH_USER "rick-gleason")
-set(CLOUDSMITH_USER "opencpn")
-
-# Set if Cloudsmith Base Repository name does not match your Git Repository name.
-#set(CLOUDSMITH_BASE_REPOSITORY "${GIT_REPOSITORY_NAME}")
-set(CLOUDSMITH_BASE_REPOSITORY "climatology")  #without the _pi
-
-# Set Plugin info-url, summary and description									 
-set(XML_INFO_URL "https://opencpn.org/OpenCPN/plugins/climatology.html")
-set(XML_SUMMARY ${SHORT_DESCRIPTION})
-set(XML_DESCRIPTION ${LONG_DESCRIPTION})
+# BUILD option(s) specific to Unix
+if(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
+    option(BUILD_GTK3 "Force the build to use GTK3" OFF)
+endif(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
 
 ##
 ## ----- Modify section above to include all the details for your plugin ----- ##
+
 ## ----- Modify section below if there are special requirements for the plugin ----- ##
 ##
 
@@ -218,19 +231,9 @@ SET(LIBHDRS
 ##=============================================================
 # Modify/configure 'Include' Directories below for the Plugin
 ##=============================================================
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/extinclude)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/libs/wx/include)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude/wxcurl)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpninclude/wxcurl/include)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpnsrc/lz4)
-# include_directories(BEFORE ${PROJECT_SOURCE_DIR}/ocpnsrc/bitmaps)
-#INCLUDE_DIRECTORIES(BEFORE ${PROJECT_SOURCE_DIR}/src/libaudiofile)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src/plugingl)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src/tinyxml)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src/jsoncpp)
-#include_directories(BEFORE ${PROJECT_SOURCE_DIR}/src/jsoncpp/json)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/include/GL)
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/api-16)
 
@@ -238,7 +241,6 @@ ADD_LIBRARY(${PACKAGE_NAME} SHARED ${SRC_CLIMATOLOGY} ${HDRS} ${LIBSRC} ${LIBHDR
 
 IF(NOT UNIX)
     SET(SRC_BZIP
-#			src/bzip2/bzlib.h					
             src/bzip2/bzlib.c 
             src/bzip2/blocksort.c 
             src/bzip2/compress.c 
@@ -246,7 +248,6 @@ IF(NOT UNIX)
             src/bzip2/decompress.c 
             src/bzip2/huffman.c 
             src/bzip2/randtable.c
-#			src/bzip2/bzlib_private.h								   
     )
     ADD_LIBRARY(LIB_BZIP_CL STATIC ${SRC_BZIP})
     TARGET_LINK_LIBRARIES( ${PACKAGE_NAME} LIB_BZIP_CL )
@@ -255,12 +256,6 @@ IF(NOT UNIX)
     include_directories(${PROJECT_SOURCE_DIR}/src/bzip2)
 ENDIF(NOT UNIX)
 
-#added but not used, from wxroute
-#IF(NOT UNIX)
-#    INCLUDE_DIRECTORIES(src/zlib-1.2.3)
-#    INCLUDE_DIRECTORIES(src/bzip2)
-#	INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/jsoncpp)
-#ENDIF(NOT UNIX)
 IF(WIN32)
   IF(MSVC)
     SET(OPENCPN_IMPORT_LIB "../../${CMAKE_CFG_INTDIR}/${PARENT}")
@@ -271,19 +266,6 @@ IF(WIN32)
   ENDIF()
 ENDIF(WIN32)
 
-# aded but not used from wx-route
-#IF(WIN32)
-#  IF(MSVC)
-#    INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/buildwin/include)
-#	INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/jsoncpp)
-#    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} "${CMAKE_SOURCE_DIR}/buildwin/zlib1.lib")
-#  ELSE()
-#    # MINGW
-##    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} "-lwxzlib-2.8")
-#	INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src/jsoncpp)
-#    TARGET_LINK_LIBRARIES(${PACKAGE_NAME} "-lz")
-#  ENDIF()
-#ENDIF()
 
 #========================================================
 include("PluginJSON")
@@ -298,7 +280,9 @@ include("PluginGL")
 #========================================================
 include("PluginInstall")
 include("PluginLocalization")
-include("PluginPackage")
+if (BUILD_LEGACY_MODE)
+    include("PluginPackage")
+endif (BUILD_LEGACY_MODE)
 #========================================================
 
 #from wxroute

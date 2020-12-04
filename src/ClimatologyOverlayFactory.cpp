@@ -42,6 +42,12 @@
 #include "GLES2/gl2.h"
 #endif
 
+/* GTK3 GL include bug */
+#if defined(__WXGTK__)
+#include <GL/glx.h>
+#endif
+
+
 #include "climatology_pi.h"
 #include "gldefs.h"
 #include "icons.h"

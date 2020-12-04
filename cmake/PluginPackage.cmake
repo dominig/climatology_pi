@@ -5,11 +5,11 @@
 set(SAVE_CMLOC ${CMLOC})
 set(CMLOC "PluginPackage: ")
 
-# build a FLATPAK installer package
-message(STATUS "${CMLOC}Package: OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}")
-
 if(OCPN_FLATPAK_CONFIG)
     # On a flatpak build lib libraries such as LibGL and wxWidgets are only available in the flatpak sandbox. Thus, building flatpak must be done before attempts to locate these non-existing libraries in the host i. e., before any FindLibrary(), FindWxWidgets(), etc.
+
+    # build a FLATPAK installer package
+    message(STATUS "${CMLOC}Package: OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}")
     find_program(TAR NAMES gtar tar)
     if(NOT TAR)
         message(FATAL_ERROR "tar not found, required for OCPN_FLATPAK")

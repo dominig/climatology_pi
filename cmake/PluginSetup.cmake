@@ -5,11 +5,6 @@
 set(SAVE_CMLOC ${CMLOC})
 set(CMLOC "PluginSetup: ")
 
-if(NOT DEFINED GIT_REPOSITORY_SERVER)
-    set(GIT_REPOSITORY_SERVER "github.com")
-    message(STATUS "${CMLOC}GIT_REPOSITORY_SERVER not found setting to: ${GIT_REPOSITORY_SERVER}")
-endif()
-
 # Export variables used in plugin setup: GIT_HASH, GIT_COMMIT, PKG_TARGET, PKG_TARGET_VERSION and PKG_NVR
 if(NOT ${PACKAGE} MATCHES "(.*)_pi")
     set(PACKAGE_NAME ${PACKAGE}_pi)
@@ -26,24 +21,32 @@ message(STATUS "${CMLOC}PROJECT_VERSION: ${PROJECT_VERSION}")
 set(PACKAGE_VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_TWEAK}")
 
 message(STATUS "${CMLOC}${VERBOSE_NAME} Version: ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_TWEAK}")
-message(STATUS "${CMLOC}OPCN_FLATPAK: ${OCPN_FLATPAK}")
+if (NOT ${BUILD_LEGACY_MODE})
+    if(NOT DEFINED GIT_REPOSITORY_SERVER)
+        set(GIT_REPOSITORY_SERVER "github.com")
+        message(STATUS "${CMLOC}GIT_REPOSITORY_SERVER not found setting to: ${GIT_REPOSITORY_SERVER}")
+    endif()
+    
+    message(STATUS "${CMLOC}OPCN_FLATPAK: ${OCPN_FLATPAK}")
+    
+    set(PKG_NVR ${PACKAGE_NAME}-${PROJECT_VERSION})
+    set(PKG_URL "https://dl.cloudsmith.io/public/--pkg_repo--/raw/names/--name--/versions/--version--/--filename--")
+    
+    execute_process(
+        COMMAND git log -1 --format=%h
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+        
+    execute_process(
+        COMMAND git log -1 --format=%ci
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_DATE OUTPUT_STRIP_TRAILING_WHITESPACE)
+        
+endif (NOT ${BUILD_LEGACY_MODE})
 
-set(PKG_NVR ${PACKAGE_NAME}-${PROJECT_VERSION})
-set(PKG_URL "https://dl.cloudsmith.io/public/--pkg_repo--/raw/names/--name--/versions/--version--/--filename--")
-
-execute_process(
-    COMMAND git log -1 --format=%h
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_HASH
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(
-    COMMAND git log -1 --format=%ci
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE GIT_COMMIT_DATE OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-message(STATUS "${CMLOC}OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}, UNIX: ${UNIX}")
 if(OCPN_FLATPAK_CONFIG OR OCPN_FLATPAK_BUILD)
+    message(STATUS "${CMLOC}OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}, UNIX: ${UNIX}")
     set(PKG_TARGET "flatpak")
     set(PKG_TARGET_VERSION "18.08") # As of flatpak/*yaml
 elseif(MINGW)
@@ -67,12 +70,18 @@ elseif(APPLE)
     execute_process(COMMAND "sw_vers" "-productVersion" OUTPUT_VARIABLE PKG_TARGET_VERSION)
 elseif(UNIX)
     # Some linux dist:
-    execute_process(COMMAND "lsb_release" "-is" OUTPUT_VARIABLE PKG_TARGET)
-    execute_process(COMMAND "lsb_release" "-rs" OUTPUT_VARIABLE PKG_TARGET_VERSION)
+    find_program (LSB_RELEASE_COMMAND lsb_release)
+    if (EXISTS ${LSB_RELEASE_COMMAND})
+        execute_process(COMMAND "lsb_release" "-is" OUTPUT_VARIABLE PKG_TARGET)
+        execute_process(COMMAND "lsb_release" "-rs" OUTPUT_VARIABLE PKG_TARGET_VERSION)
+    else (${LSB_RELEASE_COMMAND})
+        message(FATAL_ERROR "${CMLOC}: lsb_release command was NOT found in PATH")
+    endif (EXISTS ${LSB_RELEASE_COMMAND})
 else()
     set(PKG_TARGET "unknown")
     set(PKG_TARGET_VERSION 1)
 endif()
+
 
 if(NOT WIN32)
     # default
@@ -103,18 +112,12 @@ if(NOT WIN32)
                     set(ARCH "i386")
                 endif(CMAKE_SIZEOF_VOID_P MATCHES "8")
             endif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm*")
-        endif(EXISTS /etc/debian_version)
-        if(NOT DEFINED PACKAGE_FORMAT)
-            if(EXISTS /app)
+         elseif(EXISTS /app)
                 message(STATUS "*** Flatpak detected  ***")
                 set(PACKAGE_FORMAT "TGZ")
                 set(ARCH "x86_64")
                 set(LIB_INSTALL_DIR "lib")
-            endif(EXISTS /app)
-        endif(NOT DEFINED PACKAGE_FORMAT)
-
-        if(NOT DEFINED PACKAGE_FORMAT)
-            if(EXISTS /etc/redhat-release)
+         elseif(EXISTS /etc/redhat-release)
                 message(STATUS "${CMLOC}*** Redhat detected  ***")
                 set(PACKAGE_FORMAT "RPM")
                 set(PACKAGE_DEPS "opencpn")
@@ -125,11 +128,7 @@ if(NOT WIN32)
                     set(ARCH "i386")
                     set(LIB_INSTALL_DIR "lib")
                 endif(CMAKE_SIZEOF_VOID_P MATCHES "8")
-            endif(EXISTS /etc/redhat-release)
-        endif(NOT DEFINED PACKAGE_FORMAT)
-
-        if(NOT DEFINED PACKAGE_FORMAT)
-            if(EXISTS /etc/os-release
+         elseif(EXISTS /etc/os-release
                OR EXISTS /etc/sysconfig/SuSEfirewall2.d
                OR EXISTS /etc/suse-release
                OR EXISTS /etc/SuSE-release)
@@ -138,17 +137,12 @@ if(NOT WIN32)
                 set(PACKAGE_DEPS "opencpn")
                 if(CMAKE_SIZEOF_VOID_P MATCHES "8")
                     set(ARCH "x86_64")
-                    set(LIB_INSTALL_DIR "lib")
+                    set(LIB_INSTALL_DIR "lib64")
                 else(CMAKE_SIZEOF_VOID_P MATCHES "8")
                     set(ARCH "i386")
                     set(LIB_INSTALL_DIR "lib")
                 endif(CMAKE_SIZEOF_VOID_P MATCHES "8")
-            endif(
-                EXISTS /etc/os-release
-                OR EXISTS /etc/sysconfig/SuSEfirewall2.d
-                OR EXISTS /etc/suse-release
-                OR EXISTS /etc/SuSE-release)
-        endif(NOT DEFINED PACKAGE_FORMAT)
+         endif(EXISTS /etc/debian_version)
 
     endif(UNIX AND NOT APPLE)
 

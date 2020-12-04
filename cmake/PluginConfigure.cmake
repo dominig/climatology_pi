@@ -7,118 +7,137 @@ set(CMLOC "PluginConfigure: ")
 
 message(STATUS "${CMLOC}*** Staging to build ${PACKAGE_NAME} ***")
 
-message(STATUS "${CMLOC}CIRCLECI: ${CIRCLECLI}, Env CIRCLECI: $ENV{CIRCLECI}")
-message(STATUS "${CMLOC}TRAVIS: ${TRAVIS}, Env TRAVIS: $ENV{TRAVIS}")
-
-set(GIT_REPOSITORY "")
-
-if($ENV{CIRCLECI})
-    set(GIT_REPOSITORY "$ENV{CIRCLE_PROJECT_USERNAME}/$ENV{CIRCLE_PROJECT_REPONAME}")
-    set(GIT_REPOSITORY_BRANCH "$ENV{CIRCLE_BRANCH}")
-    set(GIT_REPOSITORY_TAG "$ENV{CIRCLE_TAG}")
-elseif($ENV{TRAVIS})
-    set(GIT_REPOSITORY "$ENV{TRAVIS_REPO_SLUG}")
-    set(GIT_REPOSITORY_BRANCH "$ENV{TRAVIS_BRANCH}")
-    set(GIT_REPOSITORY_TAG "$ENV{TRAVIS_TAG}")
-    if("${GIT_REPOSITORY_BRANCH}" STREQUAL "${GIT_REPOSITORY_TAG}")
-        # Travis sets TRAVIS_BRANCH to TRAVIS_TAG for tagged builds. Need to clear this setting
-        set(GIT_REPOSITORY_BRANCH "")
-    endif()
-elseif($ENV{APPVEYOR})
-    set(GIT_REPOSITORY "$ENV{APPVEYOR_REPO_NAME}")
-    set(GIT_REPOSITORY_BRANCH "$ENV{APPVEYOR_REPO_BRANCH}")
-    set(GIT_REPOSITORY_TAG "$ENV{APPVEYOR_REPO_TAG_NAME}")
-else()
-    # Get the current working branch
-    execute_process(
-        COMMAND git rev-parse --abbrev-ref HEAD
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_REPOSITORY_BRANCH
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if("${GIT_REPOSITORY_BRANCH}" STREQUAL "")
-        message(STATUS "${CMLOC}Setting default GIT repository branch - master")
-        set(GIT_REPOSITORY_BRANCH "master")
-    endif()
-    execute_process(
-        COMMAND git tag --contains
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_REPOSITORY_TAG OUTPUT_STRIP_TRAILING_WHITESPACE)
-    execute_process(
-        COMMAND git status --porcelain -b
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_STATUS OUTPUT_STRIP_TRAILING_WHITESPACE)
-    string(FIND ${GIT_STATUS} "..." START_TRACKED)
-    if(NOT START_TRACKED EQUAL -1)
-        string(FIND ${GIT_STATUS} "/" END_TRACKED)
-        math(EXPR START_TRACKED "${START_TRACKED}+3")
-        math(EXPR END_TRACKED "${END_TRACKED}-${START_TRACKED}")
-        string(SUBSTRING ${GIT_STATUS} ${START_TRACKED} ${END_TRACKED} GIT_REPOSITORY_REMOTE)
-        message(STATUS "${CMLOC}GIT_REPOSITORY_REMOTE: ${GIT_REPOSITORY_REMOTE}")
-        execute_process(
-            COMMAND git remote get-url ${GIT_REPOSITORY_REMOTE}
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            OUTPUT_VARIABLE GIT_REPOSITORY_URL OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_VARIABLE GIT_REMOTE_ERROR)
-        if(NOT GIT_REMOTE_ERROR STREQUAL "")
-            message(STATUS "${CMLOC}Command error: ${GIT_REMOTE_ERROR}")
-            message(STATUS "${CMLOC}Using default repository")
-        else()
-            string(FIND ${GIT_REPOSITORY_URL} ${GIT_REPOSITORY_SERVER} START_URL REVERSE)
-            string(LENGTH ${GIT_REPOSITORY_SERVER} STRING_LENGTH)
-            math(EXPR START_URL "${START_URL}+1+${STRING_LENGTH}")
-            string(LENGTH ${GIT_REPOSITORY_URL} STRING_LENGTH)
-            message(STATUS "${CMLOC}START_URL: ${START_URL}, STRING_LENGTH: ${STRING_LENGTH}")
-            string(SUBSTRING ${GIT_REPOSITORY_URL} ${START_URL} ${STRING_LENGTH} GIT_REPOSITORY)
-        endif()
-    else()
-        message(STATUS "${CMLOC}Branch is not tracking a remote branch")
-    endif()
-endif()
-message(STATUS "${CMLOC}GIT_REPOSITORY: ${GIT_REPOSITORY}")
-message(STATUS "${CMLOC}Git Branch: \"${GIT_REPOSITORY_BRANCH}\"")
-message(STATUS "${CMLOC}Git Tag: \"${GIT_REPOSITORY_TAG}\"")
-if("${GIT_REPOSITORY_BRANCH}" STREQUAL "")
-    set(GIT_BRANCH_OR_TAG "tag")
-    set(GIT_REPOSITORY_ITEM ${GIT_REPOSITORY_TAG})
-else()
-    set(GIT_BRANCH_OR_TAG "branch")
-    set(GIT_REPOSITORY_ITEM ${GIT_REPOSITORY_BRANCH})
-endif()
-message(STATUS "${CMLOC}GIT_BRANCH_OR_TAG: ${GIT_BRANCH_OR_TAG}")
-message(STATUS "${CMLOC}GIT_REPOSITORY_ITEM: ${GIT_REPOSITORY_ITEM}")
-
-if(NOT DEFINED CLOUDSMITH_BASE_REPOSITORY AND NOT ${GIT_REPOSITORY} STREQUAL "")
-    string(FIND ${GIT_REPOSITORY} "/" START_NAME REVERSE)
-    math(EXPR START_NAME "${START_NAME}+1")
-    string(LENGTH ${GIT_REPOSITORY} STRING_LENGTH)
-    message(STATUS "${CMLOC}START_NAME: ${START_NAME}, STRING_LENGTH: ${STRING_LENGTH}")
-    string(SUBSTRING ${GIT_REPOSITORY} ${START_NAME} ${STRING_LENGTH} CLOUDSMITH_BASE_REPOSITORY)
-endif()
-message(STATUS "${CMLOC}CLOUDSMITH_BASE_REPOSITORY: ${CLOUDSMITH_BASE_REPOSITORY}")
-
 # Do the version.h & wxWTranslateCatalog configuration into the build output directory, thereby allowing building from a read-only source tree.
-if(NOT SKIP_VERSION_CONFIG)
-    set(BUILD_INCLUDE_PATH ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY})
-    find_file(PLUGIN_EXTRA_VERSION_VARS version.h.extra ${CMAKE_CURRENT_SOURCE_DIR}/cmake/in-files )
-    message(STATUS "${CMLOC}PLUGIN_EXTRA_VERSION_VARS: ${PLUGIN_EXTRA_VERSION_VARS}")
-    if("${PLUGIN_EXTRA_VERSION_VARS}" STREQUAL "PLUGIN_EXTRA_VERSION_VARS-NOTFOUND")
-        set(EXTRA_VERSION_INFO "")
+    if(NOT SKIP_VERSION_CONFIG)
+        set(BUILD_INCLUDE_PATH ${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY})
+        configure_file(cmake/in-files/version.h.in ${BUILD_INCLUDE_PATH}/include/version.h)
+        find_file(PLUGIN_EXTRA_VERSION_VARS version.h.extra ${CMAKE_CURRENT_SOURCE_DIR}/cmake/in-files )
+        message(STATUS "${CMLOC}PLUGIN_EXTRA_VERSION_VARS: ${PLUGIN_EXTRA_VERSION_VARS}")
+        if("${PLUGIN_EXTRA_VERSION_VARS}" STREQUAL "PLUGIN_EXTRA_VERSION_VARS-NOTFOUND")
+            set(EXTRA_VERSION_INFO "")
+        else()
+            configure_file(${PLUGIN_EXTRA_VERSION_VARS} ${BUILD_INCLUDE_PATH}/include/version_extra.h)
+            set(EXTRA_VERSION_INFO "#include version_extra.h")
+        endif()
+        configure_file(cmake/in-files/wxWTranslateCatalog.h.in ${BUILD_INCLUDE_PATH}/include/wxWTranslateCatalog.h)
+        include_directories(${BUILD_INCLUDE_PATH}/include)
+    endif(NOT SKIP_VERSION_CONFIG)
+
+if (NOT ${BUILD_LEGACY_MODE})
+    message(STATUS "${CMLOC}CIRCLECI: ${CIRCLECLI}, Env CIRCLECI: $ENV{CIRCLECI}")
+    message(STATUS "${CMLOC}TRAVIS: ${TRAVIS}, Env TRAVIS: $ENV{TRAVIS}")
+    
+    set(GIT_REPOSITORY "")
+    
+    if($ENV{CIRCLECI})
+        set(GIT_REPOSITORY "$ENV{CIRCLE_PROJECT_USERNAME}/$ENV{CIRCLE_PROJECT_REPONAME}")
+        set(GIT_REPOSITORY_BRANCH "$ENV{CIRCLE_BRANCH}")
+        set(GIT_REPOSITORY_TAG "$ENV{CIRCLE_TAG}")
+    elseif($ENV{TRAVIS})
+        set(GIT_REPOSITORY "$ENV{TRAVIS_REPO_SLUG}")
+        set(GIT_REPOSITORY_BRANCH "$ENV{TRAVIS_BRANCH}")
+        set(GIT_REPOSITORY_TAG "$ENV{TRAVIS_TAG}")
+        if("${GIT_REPOSITORY_BRANCH}" STREQUAL "${GIT_REPOSITORY_TAG}")
+            # Travis sets TRAVItrasport lourd allemagne franceS_BRANCH to TRAVIS_TAG for tagged builds. Need to clear this setting
+            set(GIT_REPOSITORY_BRANCH "")
+        endif()
+    elseif($ENV{APPVEYOR})
+        set(GIT_REPOSITORY "$ENV{APPVEYOR_REPO_NAME}")
+        set(GIT_REPOSITORY_BRANCH "$ENV{APPVEYOR_REPO_BRANCH}")
+        set(GIT_REPOSITORY_TAG "$ENV{APPVEYOR_REPO_TAG_NAME}")
     else()
-        configure_file(${PLUGIN_EXTRA_VERSION_VARS} ${BUILD_INCLUDE_PATH}/include/version_extra.h)
-        set(EXTRA_VERSION_INFO "#include version_extra.h")
+        # Get the current working branch
+        execute_process(
+            COMMAND git rev-parse --abbrev-ref HEAD
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE GIT_REPOSITORY_BRANCH
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if("${GIT_REPOSITORY_BRANCH}" STREQUAL "")
+                message(STATUS "${CMLOC}Setting default GIT repository branch - master")
+                set(GIT_REPOSITORY_BRANCH "master")
+            endif()
+            execute_process(
+                COMMAND git tag --contains
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_REPOSITORY_TAG OUTPUT_STRIP_TRAILING_WHITESPACE)
+                execute_process(
+                    COMMAND git status --porcelain -b
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                    OUTPUT_VARIABLE GIT_STATUS OUTPUT_STRIP_TRAILING_WHITESPACE)
+                    string(FIND ${GIT_STATUS} "..." START_TRACKED)
+                    if(NOT START_TRACKED EQUAL -1)
+                        string(FIND ${GIT_STATUS} "/" END_TRACKED)
+                        math(EXPR START_TRACKED "${START_TRACKED}+3")
+                        math(EXPR END_TRACKED "${END_TRACKED}-${START_TRACKED}")
+                        string(SUBSTRING ${GIT_STATUS} ${START_TRACKED} ${END_TRACKED} GIT_REPOSITORY_REMOTE)
+                        message(STATUS "${CMLOC}GIT_REPOSITORY_REMOTE: ${GIT_REPOSITORY_REMOTE}")
+                        execute_process(
+                            COMMAND git remote get-url ${GIT_REPOSITORY_REMOTE}
+                            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                            OUTPUT_VARIABLE GIT_REPOSITORY_URL OUTPUT_STRIP_TRAILING_WHITESPACE
+                            ERROR_VARIABLE GIT_REMOTE_ERROR)
+                            if(NOT GIT_REMOTE_ERROR STREQUAL "")
+                                message(STATUS "${CMLOC}Command error: ${GIT_REMOTE_ERROR}")
+                                message(STATUS "${CMLOC}Using default repository")
+                            else()
+                                string(FIND ${GIT_REPOSITORY_URL} ${GIT_REPOSITORY_SERVER} START_URL REVERSE)
+                                string(LENGTH ${GIT_REPOSITORY_SERVER} STRING_LENGTH)
+                                math(EXPR START_URL "${START_URL}+1+${STRING_LENGTH}")
+                                string(LENGTH ${GIT_REPOSITORY_URL} STRING_LENGTH)
+                                message(STATUS "${CMLOC}START_URL: ${START_URL}, STRING_LENGTH: ${STRING_LENGTH}")
+                                string(SUBSTRING ${GIT_REPOSITORY_URL} ${START_URL} ${STRING_LENGTH} GIT_REPOSITORY)
+                            endif()
+                    else()
+                        message(STATUS "${CMLOC}Branch is not tracking a remote branch")
+                    endif()
     endif()
-    configure_file(cmake/in-files/version.h.in ${BUILD_INCLUDE_PATH}/include/version.h)
-    configure_file(cmake/in-files/wxWTranslateCatalog.h.in ${BUILD_INCLUDE_PATH}/include/wxWTranslateCatalog.h)
-    include_directories(${BUILD_INCLUDE_PATH}/include)
-endif(NOT SKIP_VERSION_CONFIG)
-
-# configure xml file for circleci
-message(STATUS "${CMLOC}OCPN_TARGET: $ENV{OCPN_TARGET}")
-if(NOT DEFINED $ENV{OCPN_TARGET})
-    set($ENV{OCPN_TARGET} ${PKG_TARGET})
-    message(STATUS "${CMLOC}Setting OCPN_TARGET")
-endif()
-
+    message(STATUS "${CMLOC}GIT_REPOSITORY: ${GIT_REPOSITORY}")
+    message(STATUS "${CMLOC}Git Branch: \"${GIT_REPOSITORY_BRANCH}\"")
+    message(STATUS "${CMLOC}Git Tag: \"${GIT_REPOSITORY_TAG}\"")
+    if("${GIT_REPOSITORY_BRANCH}" STREQUAL "")
+        set(GIT_BRANCH_OR_TAG "tag")
+        set(GIT_REPOSITORY_ITEM ${GIT_REPOSITORY_TAG})
+    else()
+        set(GIT_BRANCH_OR_TAG "branch")
+        set(GIT_REPOSITORY_ITEM ${GIT_REPOSITORY_BRANCH})
+    endif()
+    message(STATUS "${CMLOC}GIT_BRANCH_OR_TAG: ${GIT_BRANCH_OR_TAG}")
+    message(STATUS "${CMLOC}GIT_REPOSITORY_ITEM: ${GIT_REPOSITORY_ITEM}")
+    
+    if(NOT DEFINED CLOUDSMITH_BASE_REPOSITORY AND NOT ${GIT_REPOSITORY} STREQUAL "")
+        string(FIND ${GIT_REPOSITORY} "/" START_NAME REVERSE)
+        math(EXPR START_NAME "${START_NAME}+1")
+        string(LENGTH ${GIT_REPOSITORY} STRING_LENGTH)
+        message(STATUS "${CMLOC}START_NAME: ${START_NAME}, STRING_LENGTH: ${STRING_LENGTH}")
+        string(SUBSTRING ${GIT_REPOSITORY} ${START_NAME} ${STRING_LENGTH} CLOUDSMITH_BASE_REPOSITORY)
+    endif()
+    message(STATUS "${CMLOC}CLOUDSMITH_BASE_REPOSITORY: ${CLOUDSMITH_BASE_REPOSITORY}")
+    
+    # configure xml file for circleci
+    message(STATUS "${CMLOC}OCPN_TARGET: $ENV{OCPN_TARGET}")
+    if(NOT DEFINED $ENV{OCPN_TARGET})
+        set($ENV{OCPN_TARGET} ${PKG_TARGET})
+        message(STATUS "${CMLOC}Setting OCPN_TARGET")
+    endif()
+    message(STATUS "${CMLOC}*.in files generated in ${CMAKE_CURRENT_BINARY_DIR}")
+    message(STATUS "${CMLOC}PACKAGING_NAME_XML: ${PACKAGING_NAME_XML}")
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/plugin.xml.in ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGING_NAME_XML}.xml)
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/pkg_version.sh.in ${CMAKE_CURRENT_BINARY_DIR}/pkg_version.sh)
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/cloudsmith-upload.sh.in ${CMAKE_CURRENT_BINARY_DIR}/cloudsmith-upload.sh @ONLY)
+    configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/PluginCPackOptions.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PluginCPackOptions.cmake @ONLY)
+    message(STATUS "${CMLOC}Checking OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}")
+    if(OCPN_FLATPAK_CONFIG)
+        configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/org.opencpn.OpenCPN.Plugin.yaml.in ${CMAKE_CURRENT_BINARY_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.${PACKAGE}.yaml)
+        
+        message(STATUS "${CMLOC}Done OCPN_FLATPAK CONFIG")
+        message(STATUS "${CMLOC}Directory used: ${CMAKE_CURRENT_BINARY_DIR}/flatpak")
+        message(STATUS "${CMLOC}Git Branch: ${GIT_REPOSITORY_BRANCH}")
+        set(CMLOC ${SAVE_CMLOC})
+        return()
+    endif(OCPN_FLATPAK_CONFIG)
+    
+endif (NOT ${BUILD_LEGACY_MODE})
+    
 if("$ENV{BUILD_GTK3}" STREQUAL "true")
     set(PKG_TARGET_GTK "-gtk3")
     message(STATUS "${CMLOC}Found gtk3")
@@ -148,16 +167,10 @@ endif()
 
 set(PKG_TARGET_FULL "${PKG_TARGET}${PKG_TARGET_GTK}${PKG_TARGET_ARCH}")
 message(STATUS "${CMLOC}PKG_TARGET_FULL: ${PKG_TARGET}${PKG_TARGET_GTK}${PKG_TARGET_ARCH}")
-message(STATUS "${CMLOC}*.in files generated in ${CMAKE_CURRENT_BINARY_DIR}")
-message(STATUS "${CMLOC}PACKAGING_NAME_XML: ${PACKAGING_NAME_XML}")
-configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/plugin.xml.in ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGING_NAME_XML}.xml)
-configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/pkg_version.sh.in ${CMAKE_CURRENT_BINARY_DIR}/pkg_version.sh)
-configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/cloudsmith-upload.sh.in ${CMAKE_CURRENT_BINARY_DIR}/cloudsmith-upload.sh @ONLY)
-configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/PluginCPackOptions.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PluginCPackOptions.cmake @ONLY)
 
 
-message(STATUS "${CMLOC}Checking OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}")
 if(OCPN_FLATPAK_CONFIG)
+    message(STATUS "${CMLOC}Checking OCPN_FLATPAK_CONFIG: ${OCPN_FLATPAK_CONFIG}")
     configure_file(${CMAKE_SOURCE_DIR}/cmake/in-files/org.opencpn.OpenCPN.Plugin.yaml.in ${CMAKE_CURRENT_BINARY_DIR}/flatpak/org.opencpn.OpenCPN.Plugin.${PACKAGE}.yaml)
 
     message(STATUS "${CMLOC}Done OCPN_FLATPAK CONFIG")
@@ -200,6 +213,7 @@ if(NOT WIN32 AND NOT APPLE)
 
     add_definitions(" -DPREFIX=\\\"${CMAKE_INSTALL_PREFIX}\\\"")
     # profiling with gprof ADD_DEFINITIONS( -pg ) SET(CMAKE_EXE_LINKER_FLAGS -pg) profiling with gcov ADD_DEFINITIONS( "-fprofile-arcs -ftest-coverage" ) SET(EXTRA_LIBS ${EXTRA_LIBS} "gcov")
+    FIND_PACKAGE(PkgConfig REQUIRED)
 endif(NOT WIN32 AND NOT APPLE)
 
 if(MINGW)
@@ -389,33 +403,29 @@ if(NOT QT_ANDROID)
     message(STATUS "${CMLOC} Revised wxWidgets Libraries: ${wxWidgets_LIBRARIES}")
 endif(NOT QT_ANDROID)
 
-if(NOT WIN32
-   AND NOT APPLE
-   AND NOT QT_ANDROID)
-    option(OCPN_FORCE_GTK3 "Force the build to use GTK3" OFF)
-
-    if(NOT OCPN_FORCE_GTK3)
+if(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
+    if(NOT BUILD_GTK3)
         find_package(GTK2)
-    endif(NOT OCPN_FORCE_GTK3)
-
-    if(GTK2_FOUND)
-        set(wxWidgets_CONFIG_OPTIONS ${wxWidgets_CONFIG_OPTIONS} --toolkit=gtk2)
-        include_directories(${GTK2_INCLUDE_DIRS})
-        set(GTK_LIBRARIES ${GTK2_LIBRARIES})
-        message(STATUS "${CMLOC}Building against GTK2...")
-    else(GTK2_FOUND)
-        find_package(GTK3)
+        if(GTK2_FOUND)
+            set(wxWidgets_CONFIG_OPTIONS ${wxWidgets_CONFIG_OPTIONS} --toolkit=gtk2)
+            include_directories(${GTK2_INCLUDE_DIRS})
+            set(GTK_LIBRARIES ${GTK2_LIBRARIES})
+            message(STATUS "${CMLOC}Building against GTK2...")
+        else (GTK2_FOUND)
+            message(FATAL_ERROR "${CMLOC}No GTK2 found try with cmake -DBUILD_GTK3=ON")
+        endif (GTK2_FOUND)
+    else(NOT BUILD_GTK3)
+#       search_package(GTK3)
+        PKG_CHECK_MODULES(GTK3 REQUIRED gtk+-3.0)
         include_directories(${GTK3_INCLUDE_DIRS})
         set(GTK_LIBRARIES ${GTK3_LIBRARIES})
+        ADD_DEFINITIONS(${GTK3_CFLAGS_OTHER})
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__WXGTK3__")
         set(wxWidgets_CONFIG_OPTIONS ${wxWidgets_CONFIG_OPTIONS} --toolkit=gtk3)
         message(STATUS "${CMLOC}Building against GTK3...")
-    endif(GTK2_FOUND)
+    endif(NOT BUILD_GTK3)
     set(EXTRA_LIBS ${EXTRA_LIBS} ${GTK_LIBRARIES})
-endif(
-    NOT WIN32
-    AND NOT APPLE
-    AND NOT QT_ANDROID)
+endif(NOT WIN32 AND NOT APPLE AND NOT QT_ANDROID)
 
 # On Android, PlugIns need a specific linkage set....
 if(QT_ANDROID)
